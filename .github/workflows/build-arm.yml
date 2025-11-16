@@ -1,0 +1,57 @@
+name: Build Mumble for ARM
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [arm64, armv7]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          qtbase5-dev \
+          libqt5svg5-dev \
+          qttools5-dev \
+          qttools5-dev-tools \
+          libboost-dev \
+          libssl-dev \
+          libprotobuf-dev \
+          protobuf-compiler \
+          libogg-dev \
+          libsndfile1-dev \
+          libopus-dev
+
+    - name: Configure and Build
+      run: |
+        mkdir build && cd build
+        cmake ..
+        make -j$(nproc)
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: mumble-${{ matrix.arch }}
+        path: |
+          build/release/mumble
+          build/release/murmurd
+        if-no-files-found: error
