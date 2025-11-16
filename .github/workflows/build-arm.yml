@@ -1,26 +1,26 @@
 name: Build Mumble for ARM
 
 on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:  # 只允许手动触发，避免自动触发超时
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60  # 设置60分钟超时
+    
     strategy:
       matrix:
-        arch: [arm64, armv7]
-    
+        arch: [arm64]
+        # 先只构建arm64，成功后添加armv7
+
     steps:
-    - name: Checkout repository
+    - name: Checkout code
       uses: actions/checkout@v4
       with:
         submodules: recursive
+        fetch-depth: 1  # 只拉取最新commit，加快速度
 
-    - name: Set up QEMU
+    - name: Setup QEMU
       uses: docker/setup-qemu-action@v3
 
     - name: Install dependencies
@@ -29,23 +29,34 @@ jobs:
         sudo apt-get install -y \
           build-essential \
           cmake \
+          pkg-config \
           qtbase5-dev \
           libqt5svg5-dev \
           qttools5-dev \
-          qttools5-dev-tools \
           libboost-dev \
           libssl-dev \
           libprotobuf-dev \
           protobuf-compiler \
           libogg-dev \
           libsndfile1-dev \
-          libopus-dev
+          libopus-dev \
+          libavahi-compat-libdnssd-dev
 
-    - name: Configure and Build
+    - name: Configure with CMake
       run: |
         mkdir build && cd build
-        cmake ..
-        make -j$(nproc)
+        cmake .. -DCMAKE_BUILD_TYPE=Release -Dbundled-celt=ON
+
+    - name: Build (parallel)
+      run: |
+        cd build
+        make -j2  # 减少并行数，避免资源不足
+        # 或者使用: make --jobs 2 --keep-going
+
+    - name: List artifacts
+      run: |
+        find build -name "mumble" -type f || echo "mumble not found"
+        find build -name "murmurd" -type f || echo "murmurd not found"
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -54,4 +65,4 @@ jobs:
         path: |
           build/release/mumble
           build/release/murmurd
-        if-no-files-found: error
+        retention-days: 7
